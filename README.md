@@ -1,6 +1,16 @@
 # Reference Verifier
 
-Find source-backed bibliographic candidates, inspect disagreements, and export only the corrections you choose.
+A visual reference-review workspace evolved from my earlier [infolumi-reference-search](https://github.com/juny116/infolumi-reference-search) project.
+
+The original project established the PubMed lookup and reference-processing workflow. Reference Verifier carries that work forward under a new name, with a redesigned interface for browsing references, comparing source metadata, and selecting corrections. The earlier Git history and legacy implementation are preserved; this repository is a continuation, not a project started from scratch.
+
+![Reference review workspace with a selected year correction](docs/demo.png)
+
+## What changed
+
+The latest update focuses on the visual review experience: a light three-pane workspace, status filters, a searchable reference list, and a dedicated metadata comparison panel. Import controls live in a dialog, while correction selections remain visible as you move between references.
+
+The migration to this repository also expanded the earlier PubMed-focused workflow with Crossref and OpenAlex adapters, optional constrained field extraction, and explicit-selection exports. These extensions are distinct from the latest interface redesign.
 
 Reference Verifier is a local research-writing assistant built around **retrieval and explicit evidence**. It searches Crossref, OpenAlex, and PubMed, compares titles, authors, years, DOIs and PMIDs, and keeps source links alongside each candidate. An optional language model extracts fields from messy references; it does not generate the replacement metadata or decide what is true.
 
@@ -15,11 +25,9 @@ pip install -e '.[test]'
 reference-verifier serve
 ```
 
-Open <http://127.0.0.1:8765>. Click **Load example**, then check references in **Offline demo** mode. No keys or network calls are needed for the demo. The three examples show a matching reference, a wrong publication year, and an unmatched fictional title.
+Open <http://127.0.0.1:8765>. Click **Try an example** to open an offline review. No keys or network calls are needed for the demo. The three examples show a matching reference, a wrong publication year, and an unmatched fictional title.
 
-Switch to live mode to query the three metadata services. Input a reference per line, or upload a reference-only DOCX with one reference per paragraph. Each candidate has field comparisons and source links. **Keep original** is selected by default; choose candidates explicitly before exporting TXT or DOCX. Download the JSON report to retain the full evidence and source failures.
-
-![Reviewing a wrong-year reference](docs/demo.png)
+Use **Add references** and select **Live metadata** to query the three metadata services. Input a reference per line, or upload a reference-only DOCX with one reference per paragraph. Each candidate has field comparisons and source links. **Keep original** is selected by default; choose candidates explicitly before exporting TXT or DOCX. Download the JSON report to retain the full evidence and source failures.
 
 ## CLI
 
