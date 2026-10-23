@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!pyproject.toml
+!README.md
+!reference_verifier
+!reference_verifier/**
+**/__pycache__

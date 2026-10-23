@@ -95,3 +95,18 @@ def test_identifier_punctuation_is_significant():
 def test_missing_supplied_year_needs_review():
     result = Verifier([Source([record(year='')])]).verify(['LeCun (2015). "Deep learning". DOI: 10.1038/nature14539'])
     assert result['results'][0]['status'] == 'needs_review'
+
+
+def test_private_deployment_auth(monkeypatch):
+    import hashlib
+    monkeypatch.setenv('REFERENCE_AUTH_USER', 'reader')
+    monkeypatch.setenv('REFERENCE_AUTH_SHA256', hashlib.sha256(b'test-password').hexdigest())
+    with TestClient(app) as client:
+        for path in ['/', '/app.js', '/api/demo', '/api/report/unknown']:
+            assert client.get(path).status_code == 401
+        assert client.post('/api/check', data={'text':'title'}).status_code == 401
+        assert client.get('/',auth=('reader','wrong')).status_code == 401
+        assert client.get('/',auth=('reader','test-password')).status_code == 200
+        assert client.get('/',headers={'authorization':'Basic !invalid'}).status_code == 401
+        monkeypatch.delenv('REFERENCE_AUTH_SHA256')
+        assert client.get('/').status_code == 503

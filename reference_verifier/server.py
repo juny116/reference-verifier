@@ -7,6 +7,10 @@ from uuid import uuid4
 from urllib.parse import urlsplit
 import asyncio
 import json
+import os
+import base64
+import hashlib
+import hmac
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, JSONResponse
 from pydantic import BaseModel, Field
@@ -23,6 +27,24 @@ WEB = Path(__file__).with_name('web')
 
 @app.middleware('http')
 async def guard(request, call_next):
+    username = os.environ.get('REFERENCE_AUTH_USER', '')
+    password_hash = os.environ.get('REFERENCE_AUTH_SHA256', '')
+    if username or password_hash:
+        if not username or len(password_hash) != 64:
+            return Response('Authentication configuration incomplete.', status_code=503)
+        valid = False
+        try:
+            scheme, token = request.headers.get('authorization', '').split(' ', 1)
+            user, password = base64.b64decode(token, validate=True).decode().split(':', 1)
+            valid = (scheme.lower() == 'basic' and
+                     hmac.compare_digest(user.encode(), username.encode()) and
+                     hmac.compare_digest(hashlib.sha256(password.encode()).hexdigest(), password_hash))
+        except (ValueError, UnicodeError):
+            pass
+        if not valid:
+            return Response('Authentication required.', status_code=401,
+                            headers={'WWW-Authenticate': 'Basic realm="Reference Verifier", charset="UTF-8"',
+                                     'Cache-Control': 'no-store'})
     if request.method == 'POST':
         origin = request.headers.get('origin')
         if origin and urlsplit(origin).netloc != request.headers.get('host'):
