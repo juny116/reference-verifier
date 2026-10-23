@@ -32,3 +32,14 @@ node_modules/
 
 .ruff_cache/
 .venv/
+*.egg-info/
+.pytest_cache/
+!pyproject.toml
+!.github/workflows/ci.yml
+!reference_verifier/demo_records.json
+!examples/*.json
+!.env.example
+build/
+dist/
+
+!docs/demo.png

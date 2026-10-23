@@ -1,0 +1,17 @@
+name: Test
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e '.[test]'
+      - run: python -m pytest -q
+      - run: reference-verifier check examples/references.txt --demo --output /tmp/report.json
+      - run: reference-verifier export /tmp/report.json --selections examples/selections.json --output /tmp/reviewed.docx

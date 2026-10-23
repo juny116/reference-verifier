@@ -1,62 +1,66 @@
-# Infolumi Reference Search
+# Reference Verifier
 
-DOCX 문서의 참고문헌을 읽고 PubMed 서지 정보로 정리해 주는 Discord 봇입니다. 언어모델이 참고문헌을 구조화하고, PubMed에서 논문을 찾아 DOCX 또는 TXT 파일로 반환합니다.
+Find source-backed bibliographic candidates, inspect disagreements, and export only the corrections you choose.
 
-## 처리 흐름
+Reference Verifier is a local research-writing assistant built around **retrieval and explicit evidence**. It searches Crossref, OpenAlex, and PubMed, compares titles, authors, years, DOIs and PMIDs, and keeps source links alongside each candidate. An optional language model extracts fields from messy references; it does not generate the replacement metadata or decide what is true.
 
-1. 봇을 멘션한 메시지에서 DOCX 첨부파일을 받습니다.
-2. 문서의 문단을 참고문헌 목록으로 읽고 묶음별로 모델에 파싱을 요청합니다.
-3. 저자·제목·연도·저널 정보로 PubMed를 검색합니다.
-4. PMID로 메타데이터를 연결하고 원래 문헌 순서대로 서식을 적용합니다.
-5. Discord 스레드에 진행 상황과 완성된 파일을 보냅니다.
+## Try it
 
-모델이 일부 참고문헌을 파싱하지 못하거나 검색 결과가 없으면 해당 위치를 `Not Found`로 남깁니다. PubMed의 반환 순서가 바뀌어도 PMID를 기준으로 연결합니다.
-
-## 구조
-
-```text
-infolumi/
-├── bot.py                 # Discord 첨부파일·스레드 처리
-├── pipeline.py            # 파싱→검색→서식 적용 흐름
-├── documents.py           # DOCX 읽기와 DOCX/TXT 쓰기
-├── model_parser.py        # 참고문헌 파싱 프롬프트 구성
-├── chat_model.py          # 비동기 모델 호출
-├── reference_parsing.py   # 묶음 분할과 모델 JSON 파싱
-├── pubmed_client.py       # PubMed 검색·메타데이터 조회
-├── article_metadata.py    # PMID별 논문 인덱스
-├── citation_formatting.py # 저자·저널·권호·페이지 서식
-└── extras/                # 대화 메모리·멘션·보조 봇 도구
-```
-
-`ReferencePipeline`은 Discord 객체 없이도 동작합니다. 파서와 PubMed 클라이언트를 주입할 수 있어 문서 처리와 외부 연결을 각각 검증할 수 있습니다. 문서 입출력과 동기 HTTP 요청은 별도 스레드에서 실행합니다.
-
-## 설치와 실행
-
-Python 3.10 이상에서 저장소 루트를 기준으로 실행합니다.
+Python 3.10 or newer:
 
 ```bash
-pip install -r requirements.txt
-python -m infolumi --config-dir /absolute/path/to/conf --config-name config
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[test]'
+reference-verifier serve
 ```
 
-Hydra 설정에서 다음 항목을 읽습니다.
+Open <http://127.0.0.1:8765>. Click **Load example**, then check references in **Offline demo** mode. No keys or network calls are needed for the demo. The three examples show a matching reference, a wrong publication year, and an unmatched fictional title.
 
-| 항목 | 용도 |
-|---|---|
-| `discord.token` | Discord 봇 연결 |
-| `model.type` | `chatgpt` 모델 loader 선택 |
-| `model.model_name`, `model.temperature`, `model.max_tokens` | 모델 생성 옵션 |
-| `template.system`, `template.parse` | 참고문헌 구조화 프롬프트 |
-| `output_format` | `docx` 또는 `txt`, 기본값 `docx` |
+Switch to live mode to query the three metadata services. Input a reference per line, or upload a reference-only DOCX with one reference per paragraph. Each candidate has field comparisons and source links. **Keep original** is selected by default; choose candidates explicitly before exporting TXT or DOCX. Download the JSON report to retain the full evidence and source failures.
 
-`template.parse`는 `{references}`에 문헌 묶음을 받습니다. 파서 응답은 입력 순서의 JSON 배열이며 각 항목의 `authors`, `title`, `year`, `volume`, `journal`을 검색에 사용합니다. API 인증은 모델 클라이언트의 환경변수로 지정합니다.
+![Reviewing a wrong-year reference](docs/demo.png)
 
-## 테스트
+## CLI
 
 ```bash
-python -m unittest discover -s tests -v
+reference-verifier check examples/references.txt --demo --output report.json
+reference-verifier export report.json --selections examples/selections.json --output reviewed.docx
+# Live retrieval, with deterministic extraction:
+reference-verifier check examples/references.txt --output live-report.json
+pytest -q
 ```
 
-문서→파싱→조회→출력 흐름, 누락 문헌의 위치 유지, PubMed 응답 처리, DOCX/TXT 출력과 대화 메모리를 검사합니다.
+Selections map a zero-based reference index to the candidate ID shown in its report. Omitted references remain unchanged. Never reuse a selections file with a different report without reviewing it.
 
-[이전 파일과 새 모듈 대응표](docs/module-map.md)
+## What the AI does
+
+Set `REFERENCE_LLM_API_KEY` and `REFERENCE_LLM_MODEL`, then enable AI extraction in the UI or add `--ai` to `check`. `REFERENCE_LLM_URL` optionally overrides the OpenAI-compatible Chat Completions endpoint. See `.env.example`; environment files are **not** automatically loaded.
+
+The model receives the reference text and returns extracted title/author/year fields. The implementation accepts only fields that occur in the input, and obtains identifiers through deterministic parsing. Retrieval supplies replacement metadata. If extraction fails or configuration is absent, rules remain available and the report shows a warning. Span checks reduce invented metadata but do not prove the semantic correctness of extraction.
+
+Live mode sends reference queries to metadata providers. Enabling AI additionally sends the reference text to the configured model service and may incur usage charges. The server binds to loopback only, keeps at most 32 reports in memory for one hour, and writes files only through explicit CLI output or browser downloads. It is not a hosted multi-user service.
+
+## Interpretation and limits
+
+- **Metadata match:** strong agreement under conservative rules, not validation of a paper's scientific claims.
+- **Review needed:** conflicting/missing evidence, ambiguity, or a provider outage. Differences in author initials or publication dates can trigger review.
+- **Not found:** no candidate returned by the completed searches; not proof that a reference is fabricated.
+- **Search incomplete:** sources failed and no candidate was returned.
+
+Ranking scores are heuristics, not calibrated confidence probabilities. Providers may share upstream metadata; three agreeing sources are not three independent confirmations. Source disagreements are retained. The tool does not read full papers, verify claim-to-citation support, guarantee zero hallucinations, or provide comprehensive recall. Rule-based parsing favors `Author (year). "Title".` and identifiers; arbitrary citation styles may need the optional extractor or manual review. DOCX exports are new reference-only documents, not in-place edits preserving manuscript layout. Tables, footnotes and embedded citations are outside this MVP.
+
+## Architecture
+
+`reference_verifier/` contains extraction, three provider adapters, conservative record merging/comparison, explicit-selection export, CLI, and a FastAPI review UI. `tests_v2/` exercises wrong-year/author/title/identifier cases, ambiguity, source disagreement, outages, unsupported AI output, exports and HTTP boundaries. Offline fixtures make CI repeatable; live results depend on provider availability.
+
+See [validation](docs/validation.md) for what was actually checked and [project history](docs/provenance.md) for the earlier implementation. The original `infolumi/` code and tests are retained for provenance but are not installed or run by the new package configuration.
+
+## Provider documentation
+
+- [Crossref REST API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/)
+- [OpenAlex API authentication](https://help.openalex.org/api/authentication/)
+- [NCBI E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25501/)
+- [OpenAI Chat API](https://developers.openai.com/api/reference/resources/chat)
+
+Optional provider configuration: `CROSSREF_MAILTO`, `OPENALEX_API_KEY`, `NCBI_API_KEY`. Public access and rate limits are controlled by each provider.
